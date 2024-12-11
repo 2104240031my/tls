@@ -1,0 +1,9 @@
+[package]
+name = "tls"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+pkgcrypto = { package = "crypto", version = "*", path = "../crypto" }
+rand_core = { version = "*", features = ["getrandom"] }
+rand_chacha = "*"

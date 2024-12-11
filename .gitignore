@@ -1,3 +1,7 @@
+# directories to ignore
 /.vscode/
 /target/
+
+# files to ignore
+# /.gitignore
 /Cargo.lock

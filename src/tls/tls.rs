@@ -1,19 +1,23 @@
 use crate::tls::crypto::Hash;
-use crate::tls::error::Error;
-use crate::tls::error::ErrorCode;
+use crate::tls::error::TlsError;
+use crate::tls::error::TlsErrorCode;
+
+const HS_HEADER_LEN: usize            = HandshakeType::BYTES_LEN + 3;
+const CH_RANDOM_LEN: usize            = 32;
+const CH_LEGACY_SESSION_ID_LEN: usize = 32;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum EndpointType { Client, Server }
+pub enum TlsEndpointType { Client, Server }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum ProtocolVersion {
+pub enum TlsProtocolVersion {
     TLSv1_2 = 0x0303,
     TLSv1_3 = 0x0304,
 }
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum CipherSuite {
+pub enum TlsCipherSuite {
     TLS_AES_128_GCM_SHA256       = 0x1301,
     TLS_AES_256_GCM_SHA384       = 0x1302,
     TLS_CHACHA20_POLY1305_SHA256 = 0x1303,
@@ -22,19 +26,19 @@ pub enum CipherSuite {
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum NamedGroup {
+pub enum TlsNamedGroup {
     x25519 = 0x001d,
 }
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum SignatureScheme {
+pub enum TlsSignatureScheme {
     ed25519 = 0x0807,
 }
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum ExtensionType {
+pub enum TlsExtensionType {
     server_name                            = 0,  // RFC 6066
     status_request                         = 5,  // RFC 6066
     supported_groups                       = 10, // RFC 8422, 7919
@@ -62,6 +66,7 @@ enum State {
 }
 
 #[allow(non_camel_case_types)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum ClientState {
     START,
     WAIT_SH,
@@ -74,6 +79,7 @@ enum ClientState {
 }
 
 #[allow(non_camel_case_types)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum ServerState {
     START,
     RECVD_CH,
@@ -86,22 +92,43 @@ enum ServerState {
     CONNECTED,
 }
 
-pub struct Config {
-    endpoint_type: EndpointType,
-    versions: Vec<ProtocolVersion>,
-    cipher_suites: Vec<CipherSuite>,
-    groups: Vec<NamedGroup>,
-    sign_schemes: Vec<SignatureScheme>,
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum HandshakeType {
+    client_hello            = 1,
+    server_hello            = 2,
+    new_session_ticket      = 4,
+    end_of_early_data       = 5,
+    encrypted_extensions    = 8,
+    certificate             = 11,
+    certificate_request     = 13,
+    certificate_verify      = 15,
+    finished                = 20,
+    key_update              = 24,
+    message_hash            = 254,
+    end_handshake_type_enum = 255
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LegacyCompressionMethod { NULL = 0x00 }
+
+pub struct TlsConfig {
+    endpoint_type: TlsEndpointType,
+    versions: Vec<TlsProtocolVersion>,
+    cipher_suites: Vec<TlsCipherSuite>,
+    groups: Vec<TlsNamedGroup>,
+    sign_schemes: Vec<TlsSignatureScheme>,
 }
 
 pub struct TlsSocket {
-    endpoint_type: EndpointType,
+    endpoint_type: TlsEndpointType,
     state: State,
     // selected
-    version: Option<ProtocolVersion>,
-    cipher_suite: Option<CipherSuite>,
-    group: Option<NamedGroup>,
-    sign_scheme: Option<SignatureScheme>,
+    version: Option<TlsProtocolVersion>,
+    cipher_suite: Option<TlsCipherSuite>,
+    group: Option<TlsNamedGroup>,
+    sign_scheme: Option<TlsSignatureScheme>,
     // client_random: [u8; 32],
     // server_random: [u8; 32],
     // send_aead_iv: [u8; 12],
@@ -111,12 +138,38 @@ pub struct TlsSocket {
     // send_aead: Aead,
     // recv_aead: Aead,
     transcript_hash: Option<Hash>,
+    config: TlsConfig,
 }
 
-impl Config {
+impl TlsProtocolVersion {
+    pub const BYTES_LEN: usize = 2;
+}
 
-    pub fn new(endpoint_type: EndpointType, versions: &[ProtocolVersion], cipher_suites: &[CipherSuite],
-        groups: &[NamedGroup], sign_schemes: &[SignatureScheme]) -> Self {
+impl TlsCipherSuite {
+    pub const BYTES_LEN: usize = 2;
+}
+
+impl TlsNamedGroup {
+    pub const BYTES_LEN: usize = 2;
+}
+
+impl TlsSignatureScheme {
+    pub const BYTES_LEN: usize = 2;
+}
+
+impl HandshakeType {
+    const BYTES_LEN: usize = 1;
+}
+
+impl LegacyCompressionMethod {
+    const BYTES_LEN: usize = 1;
+}
+
+impl TlsConfig {
+
+    pub fn new(endpoint_type: TlsEndpointType, versions: &[TlsProtocolVersion],
+        cipher_suites: &[TlsCipherSuite], groups: &[TlsNamedGroup],
+        sign_schemes: &[TlsSignatureScheme]) -> Self {
         return Self{
             endpoint_type: endpoint_type,
             versions: versions.to_vec(),
@@ -126,54 +179,69 @@ impl Config {
         };
     }
 
-    pub fn push_version(&mut self, version: ProtocolVersion) {
+    pub fn push_version(&mut self, version: TlsProtocolVersion) {
         self.versions.push(version);
     }
 
-    pub fn set_versions(&mut self, versions: &[ProtocolVersion]) {
+    pub fn set_versions(&mut self, versions: &[TlsProtocolVersion]) {
         self.versions = versions.to_vec();
     }
 
-    pub fn push_cipher_suite(&mut self, cipher_suite: CipherSuite) {
+    pub fn push_cipher_suite(&mut self, cipher_suite: TlsCipherSuite) {
         self.cipher_suites.push(cipher_suite);
     }
 
-    pub fn set_cipher_suites(&mut self, cipher_suites: &[CipherSuite]) {
+    pub fn set_cipher_suites(&mut self, cipher_suites: &[TlsCipherSuite]) {
         self.cipher_suites = cipher_suites.to_vec();
     }
 
-    pub fn push_group(&mut self, group: NamedGroup) {
+    pub fn push_group(&mut self, group: TlsNamedGroup) {
         self.groups.push(group);
     }
 
-    pub fn set_groups(&mut self, groups: &[NamedGroup]) {
+    pub fn set_groups(&mut self, groups: &[TlsNamedGroup]) {
         self.groups = groups.to_vec();
     }
 
-    pub fn push_sign_scheme(&mut self, sign_scheme: SignatureScheme) {
+    pub fn push_sign_scheme(&mut self, sign_scheme: TlsSignatureScheme) {
         self.sign_schemes.push(sign_scheme);
     }
 
-    pub fn set_sign_schemes(&mut self, sign_schemes: &[SignatureScheme]) {
+    pub fn set_sign_schemes(&mut self, sign_schemes: &[TlsSignatureScheme]) {
         self.sign_schemes = sign_schemes.to_vec();
+    }
+
+}
+
+impl Clone for TlsConfig {
+
+    fn clone(&self) -> Self {
+        return Self{
+            endpoint_type: self.endpoint_type,
+            versions: self.versions.clone(),
+            cipher_suites: self.cipher_suites.clone(),
+            groups: self.groups.clone(),
+            sign_schemes: self.sign_schemes.clone()
+        };
     }
 
 }
 
 impl TlsSocket {
 
-    pub fn new(config: &Config) -> Result<Self, Error> {
+    pub fn new(config: &TlsConfig) -> Result<Self, TlsError> {
         return Ok(Self{
             endpoint_type: config.endpoint_type,
             state: match config.endpoint_type {
-                EndpointType::Client => State::Client(ClientState::START),
-                EndpointType::Server => State::Server(ServerState::START),
+                TlsEndpointType::Client => State::Client(ClientState::START),
+                TlsEndpointType::Server => State::Server(ServerState::START),
             },
             version: None,
             cipher_suite: None,
             group: None,
             sign_scheme: None,
-            transcript_hash: None
+            transcript_hash: None,
+            config: config.clone()
         });
     }
 
@@ -185,5 +253,25 @@ impl TlsSocket {
 
     pub fn transport_send(&mut self, buf: &mut [u8]) {}
     pub fn transport_recv(&mut self, buf: &mut [u8]) {}
+
+    fn send_client_hello(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
+
+        let client_hello_len: usize =
+            2 +
+            CH_RANDOM_LEN +
+            1 + CH_LEGACY_SESSION_ID_LEN +
+            2 + (TlsCipherSuite::BYTES_LEN * self.config.cipher_suites.len()) +
+            1 + LegacyCompressionMethod::BYTES_LEN;
+        // client_hello_len = client_hello_len + 2 + extensions_len;
+
+        let hs_msg_len: usize = HS_HEADER_LEN + client_hello_len;
+
+        if buf.len() < hs_msg_len {
+            return Err(TlsError::new(TlsErrorCode::BufferTooShort));
+        }
+
+        return Ok(hs_msg_len);
+
+    }
 
 }

@@ -1,8 +1,9 @@
 use pkgcrypto::crypto::error::CryptoError;
 use pkgcrypto::crypto::error::CryptoErrorCode;
 
+#[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TlsErrorCode {
+pub enum TLSErrorCode {
 
     // general
     Unknown,
@@ -23,7 +24,7 @@ pub enum TlsErrorCode {
 
 }
 
-impl TlsErrorCode {
+impl TLSErrorCode {
 
     pub fn to_str(&self) -> &str {
         return match self {
@@ -46,38 +47,38 @@ impl TlsErrorCode {
 }
 
 #[derive(Debug)]
-pub struct TlsError {
-    err_code: TlsErrorCode,
+pub struct TLSError {
+    err_code: TLSErrorCode,
     crypto_err_code: Option<CryptoErrorCode>
 }
 
-impl TlsError {
+impl TLSError {
 
-    pub fn new(err_code: TlsErrorCode) -> Self {
+    pub fn new(err_code: TLSErrorCode) -> Self {
         return Self{
             err_code: err_code,
             crypto_err_code: None
         };
     }
 
-    pub fn err_code(&self) -> TlsErrorCode {
+    pub fn err_code(&self) -> TLSErrorCode {
         return self.err_code;
     }
 
 }
 
-impl From<CryptoError> for TlsError {
+impl From<CryptoError> for TLSError {
     fn from(err: CryptoError) -> Self {
         return Self{
-            err_code: TlsErrorCode::CryptoError,
+            err_code: TLSErrorCode::CryptoError,
             crypto_err_code: Some(err.err_code())
         };
     }
 }
 
-impl std::fmt::Display for TlsError {
+impl std::fmt::Display for TLSError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        return write!(f, "TlsError: {}", if self.err_code == TlsErrorCode::CryptoError {
+        return write!(f, "TLSError: {}", if self.err_code == TLSErrorCode::CryptoError {
             format!("crypto error [{}]", self.crypto_err_code.unwrap().to_str())
         } else {
             String::from(self.err_code.to_str())
@@ -85,4 +86,4 @@ impl std::fmt::Display for TlsError {
     }
 }
 
-impl std::error::Error for TlsError {}
+impl std::error::Error for TLSError {}

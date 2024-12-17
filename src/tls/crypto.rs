@@ -34,6 +34,10 @@ pub enum Aead {
 
 impl AeadAlgorithm {
 
+    pub const MAX_KEY_LEN: usize   = Aes256Gcm::KEY_LEN;
+    pub const MAX_NONCE_LEN: usize = Aes256Gcm::MAX_NONCE_LEN;
+    pub const MAX_TAG_LEN: usize   = Aes256Gcm::TAG_LEN;
+
     pub fn instance(&self, key: &[u8]) -> Result<Aead, CryptoError> {
         return Aead::new(*self, key);
     }
@@ -140,6 +144,10 @@ pub enum DiffieHellman {
 
 impl DiffieHellmanAlgorithm {
 
+    pub const MAX_PRIVATE_KEY_LEN: usize   = X25519::PRIVATE_KEY_LEN;
+    pub const MAX_PUBLIC_KEY_LEN: usize    = X25519::PUBLIC_KEY_LEN;
+    pub const MAX_SHARED_SECRET_LEN: usize = X25519::SHARED_SECRET_LEN;
+
     pub fn priv_key_len(&self) -> usize {
         return match self {
             Self::X25519 => X25519::PRIVATE_KEY_LEN,
@@ -188,6 +196,10 @@ pub enum DigitalSignatureVerifier {
 }
 
 impl DigitalSignatureAlgorithm {
+
+    pub const MAX_PRIVATE_KEY_LEN: usize = Ed25519Signer::PRIVATE_KEY_LEN;
+    pub const MAX_PUBLIC_KEY_LEN: usize  = Ed25519Signer::PUBLIC_KEY_LEN;
+    pub const MAX_SIGNATURE_LEN: usize   = Ed25519Signer::SIGNATURE_LEN;
 
     pub fn signer_instance(&self, priv_key: &[u8]) -> Result<DigitalSignatureSigner, CryptoError> {
         return DigitalSignatureSigner::new(*self, priv_key);
@@ -298,6 +310,8 @@ pub enum Hash {
 
 impl HashAlgorithm {
 
+    pub const MAX_MESSAGE_DIGEST_LEN: usize = Sha384::MESSAGE_DIGEST_LEN;
+
     pub fn instance(&self) -> Hash {
         return Hash::new(*self);
     }
@@ -362,6 +376,8 @@ pub enum Hmac {
 }
 
 impl HmacAlgorithm {
+
+    pub const MAX_MAC_LEN: usize = HmacSha384::MAC_LEN;
 
     pub fn instance(&self, key: &[u8]) -> Result<Hmac, CryptoError> {
         return Hmac::new(*self, key);
